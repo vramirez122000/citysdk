@@ -19,7 +19,7 @@ const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?';
 const fipsGeocoderTigerWebUrl = 'http://tigerweb.geo.census.gov/ArcGIS/rest/services/State_County/MapServer/1/query?text=&geometry={"x":-122,"y": 41,"spatialReference":{"wkid":4326}}&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=STATE,COUNTY&f=json';
 const addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 const addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
-const addressGeocoderNominatimUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
+const addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
 
 export default class CitySdkRequestUtils {
   static parseToVariable(aliasOrVariable) {
@@ -118,23 +118,7 @@ export default class CitySdkRequestUtils {
     return CitySdkHttp.get(url, true);
   }
 
-
-  /**
-   * Takes an address object with the fields "street", "city", "state", and "zip".
-   * Either city and state or zip must be provided with the street. This function
-   * uses the Mapzen Search Geocoder
-   *
-   * @param address
-   * @param mapzen_api_key
-   *
-   * @returns {promise}
-   */
-  static getLatLngFromAddressUsingMapzenSearch(address, mapzen_api_key) {
-    let url = addressGeocoderMapzenUrl;
-
-    if(!mapzen_api_key) {
-      throw new Error('Mapzen API Key was not provided');
-    }
+  static validateAddressFields(address) {
 
     // Address is required. If address is not present,
     // then the request will fail.
@@ -145,6 +129,62 @@ export default class CitySdkRequestUtils {
     if (!address.city && !address.state && !address.zip) {
       throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
     }
+
+    if(!address.zip && (!address.city || !address.state)) {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+  }
+
+  /**
+   * Takes an address object with the fields "street", "city", "state", and "zip".
+   * Either city and state or zip must be provided with the street. This function
+   * uses the Nominatim Geocoder
+   *
+   * @param address
+   *
+   * @returns {promise}
+   */
+  static getLatLngFromAddressUsingNominatim(address) {
+    let url = addressGeocoderNominatimUrl;
+
+    CitySdkRequestUtils.validateAddressFields(address);
+
+    url += `&street=${address.street}`;
+
+    if (address.zip) {
+      url += `&postalcode=${address.zip}`;
+    }
+    else if (address.city && address.state) {
+      url += `&city${address.city}&county=${address.state}`;
+    }
+    else {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+    console.log(url);
+
+    return CitySdkHttp.get(url, false);
+  }
+
+  /**
+   * Takes an address object with the fields "street", "city", "state", and "zip".
+   * Either city and state or zip must be provided with the street. This function
+   * uses the Mapzen Search Geocoder
+   *
+   * @param address
+   * @param mapzenApiKey
+   *
+   * @returns {promise}
+   */
+  static getLatLngFromAddressUsingMapzenSearch(address, mapzenApiKey) {
+    let url = addressGeocoderMapzenUrl;
+
+    if(!mapzenApiKey) {
+      throw new Error('Mapzen API Key was not provided');
+    }
+
+    CitySdkRequestUtils.validateAddressFields(address);
 
     url += `${address.street}`;
 
@@ -158,7 +198,7 @@ export default class CitySdkRequestUtils {
       throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
     }
 
-    url += `&api_key=${mapzen_api_key}`;
+    url += `&api_key=${mapzenApiKey}`;
 
     console.log(url);
 
@@ -169,15 +209,28 @@ export default class CitySdkRequestUtils {
     let promiseHandler = (resolve, reject) => {
       if (request.address) {
 
+        if(request.geocoderSelection == 'nominatim') {
+          CitySdkRequestUtils.getLatLngFromAddressUsingNominatim(request.address).then((response) => {
+
+            if (response.length == 0) {
+              throw new Error(`Unexpected nominatim response: ${JSON.stringify(response)}`)
+            }
+
+            request.lng = response[0].lon;
+            request.lat = response[0].lat;
+
+          }).catch((reason) => reject(reason));
+        }
+
         if(request.geocoderSelection == 'mapzen') {
           if(!request.geocoderApiKey) {
             throw new Error('Mapzen API Key not provided, please place key in geocoderApiKey parameter')
           }
-          CitySdkRequestUtils.getLatLngFromAddressUsingMapzenSearch(request.address).then((response) => {
+          CitySdkRequestUtils.getLatLngFromAddressUsingMapzenSearch(request.address, request.geocoderApiKey).then((response) => {
 
             if (!(response.features.length > 0
               && response.features[0].geometry.type == 'Point')) {
-              throw new Error(`Unexpected mapzen response: ${response}`)
+              throw new Error(`Unexpected mapzen response: ${JSON.stringify(response)}`)
             }
 
             let coords = response.features[0].geometry.coordinates;
