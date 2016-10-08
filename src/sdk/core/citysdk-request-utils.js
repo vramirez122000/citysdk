@@ -15,7 +15,11 @@ const defaultEndpoints = {
 
 const zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 const fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
+const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?';
+const fipsGeocoderTigerWebUrl = 'http://tigerweb.geo.census.gov/ArcGIS/rest/services/State_County/MapServer/1/query?text=&geometry={"x":-122,"y": 41,"spatialReference":{"wkid":4326}}&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=STATE,COUNTY&f=json';
 const addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
+const addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
+const addressGeocoderNominatimUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 
 export default class CitySdkRequestUtils {
   static parseToVariable(aliasOrVariable) {
@@ -114,9 +118,76 @@ export default class CitySdkRequestUtils {
     return CitySdkHttp.get(url, true);
   }
 
+
+  /**
+   * Takes an address object with the fields "street", "city", "state", and "zip".
+   * Either city and state or zip must be provided with the street. This function
+   * uses the Mapzen Search Geocoder
+   *
+   * @param address
+   * @param mapzen_api_key
+   *
+   * @returns {promise}
+   */
+  static getLatLngFromAddressUsingMapzenSearch(address, mapzen_api_key) {
+    let url = addressGeocoderMapzenUrl;
+
+    if(!mapzen_api_key) {
+      throw new Error('Mapzen API Key was not provided');
+    }
+
+    // Address is required. If address is not present,
+    // then the request will fail.
+    if (!address.street) {
+      throw new Error('Invalid address! The required field "street" is missing.');
+    }
+
+    if (!address.city && !address.state && !address.zip) {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+    url += `${address.street}`;
+
+    if (address.zip) {
+      url += ` ${address.zip}`;
+    }
+    else if (address.city && address.state) {
+      url += ` ${address.city},${address.state}`;
+    }
+    else {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+    url += `&api_key=${mapzen_api_key}`;
+
+    console.log(url);
+
+    return CitySdkHttp.get(url, false);
+  }
+
   static getLatLng(request) {
     let promiseHandler = (resolve, reject) => {
       if (request.address) {
+
+        if(request.geocoderSelection == 'mapzen') {
+          if(!request.geocoderApiKey) {
+            throw new Error('Mapzen API Key not provided, please place key in geocoderApiKey parameter')
+          }
+          CitySdkRequestUtils.getLatLngFromAddressUsingMapzenSearch(request.address).then((response) => {
+
+            if (!(response.features.length > 0
+              && response.features[0].geometry.type == 'Point')) {
+              throw new Error(`Unexpected mapzen response: ${response}`)
+            }
+
+            let coords = response.features[0].geometry.coordinates;
+            request.lat = coords[1];
+            request.lng = coords[0];
+            resolve(request);
+
+          }).catch((reason) => reject(reason));
+        }
+
         CitySdkRequestUtils.getLatLngFromAddress(request.address).then((response) => {
           let coordinates = response.result.addressMatches[0].coordinates;
           request.lat = coordinates.y;

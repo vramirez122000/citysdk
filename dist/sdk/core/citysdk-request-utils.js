@@ -9,6 +9,119 @@
 	ArcGIS = 'default' in ArcGIS ? ArcGIS['default'] : ArcGIS;
 	$ = 'default' in $ ? $['default'] : $;
 
+	var asyncGenerator = function () {
+	  function AwaitValue(value) {
+	    this.value = value;
+	  }
+
+	  function AsyncGenerator(gen) {
+	    var front, back;
+
+	    function send(key, arg) {
+	      return new Promise(function (resolve, reject) {
+	        var request = {
+	          key: key,
+	          arg: arg,
+	          resolve: resolve,
+	          reject: reject,
+	          next: null
+	        };
+
+	        if (back) {
+	          back = back.next = request;
+	        } else {
+	          front = back = request;
+	          resume(key, arg);
+	        }
+	      });
+	    }
+
+	    function resume(key, arg) {
+	      try {
+	        var result = gen[key](arg);
+	        var value = result.value;
+
+	        if (value instanceof AwaitValue) {
+	          Promise.resolve(value.value).then(function (arg) {
+	            resume("next", arg);
+	          }, function (arg) {
+	            resume("throw", arg);
+	          });
+	        } else {
+	          settle(result.done ? "return" : "normal", result.value);
+	        }
+	      } catch (err) {
+	        settle("throw", err);
+	      }
+	    }
+
+	    function settle(type, value) {
+	      switch (type) {
+	        case "return":
+	          front.resolve({
+	            value: value,
+	            done: true
+	          });
+	          break;
+
+	        case "throw":
+	          front.reject(value);
+	          break;
+
+	        default:
+	          front.resolve({
+	            value: value,
+	            done: false
+	          });
+	          break;
+	      }
+
+	      front = front.next;
+
+	      if (front) {
+	        resume(front.key, front.arg);
+	      } else {
+	        back = null;
+	      }
+	    }
+
+	    this._invoke = send;
+
+	    if (typeof gen.return !== "function") {
+	      this.return = undefined;
+	    }
+	  }
+
+	  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+	    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+	      return this;
+	    };
+	  }
+
+	  AsyncGenerator.prototype.next = function (arg) {
+	    return this._invoke("next", arg);
+	  };
+
+	  AsyncGenerator.prototype.throw = function (arg) {
+	    return this._invoke("throw", arg);
+	  };
+
+	  AsyncGenerator.prototype.return = function (arg) {
+	    return this._invoke("return", arg);
+	  };
+
+	  return {
+	    wrap: function (fn) {
+	      return function () {
+	        return new AsyncGenerator(fn.apply(this, arguments));
+	      };
+	    },
+	    await: function (value) {
+	      return new AwaitValue(value);
+	    }
+	  };
+	}();
+
 	var classCallCheck = function (instance, Constructor) {
 	  if (!(instance instanceof Constructor)) {
 	    throw new TypeError("Cannot call a class as a function");
@@ -2436,7 +2549,7 @@
 	var zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 	var fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
 	var addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
-
+	var addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 	var CitySdkRequestUtils = function () {
 	  function CitySdkRequestUtils() {
 	    classCallCheck(this, CitySdkRequestUtils);
@@ -2546,11 +2659,78 @@
 
 	      return CitySdkHttp.get(url, true);
 	    }
+
+	    /**
+	     * Takes an address object with the fields "street", "city", "state", and "zip".
+	     * Either city and state or zip must be provided with the street. This function
+	     * uses the Mapzen Search Geocoder
+	     *
+	     * @param address
+	     * @param mapzen_api_key
+	     *
+	     * @returns {promise}
+	     */
+
+	  }, {
+	    key: 'getLatLngFromAddressUsingMapzenSearch',
+	    value: function getLatLngFromAddressUsingMapzenSearch(address, mapzen_api_key) {
+	      var url = addressGeocoderMapzenUrl;
+
+	      if (!mapzen_api_key) {
+	        throw new Error('Mapzen API Key was not provided');
+	      }
+
+	      // Address is required. If address is not present,
+	      // then the request will fail.
+	      if (!address.street) {
+	        throw new Error('Invalid address! The required field "street" is missing.');
+	      }
+
+	      if (!address.city && !address.state && !address.zip) {
+	        throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+	      }
+
+	      url += '' + address.street;
+
+	      if (address.zip) {
+	        url += ' ' + address.zip;
+	      } else if (address.city && address.state) {
+	        url += ' ' + address.city + ',' + address.state;
+	      } else {
+	        throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+	      }
+
+	      url += '&api_key=' + mapzen_api_key;
+
+	      console.log(url);
+
+	      return CitySdkHttp.get(url, false);
+	    }
 	  }, {
 	    key: 'getLatLng',
 	    value: function getLatLng(request) {
 	      var promiseHandler = function promiseHandler(resolve, reject) {
 	        if (request.address) {
+
+	          if (request.geocoderSelection == 'mapzen') {
+	            if (!request.geocoderApiKey) {
+	              throw new Error('Mapzen API Key not provided, please place key in geocoderApiKey parameter');
+	            }
+	            CitySdkRequestUtils.getLatLngFromAddressUsingMapzenSearch(request.address).then(function (response) {
+
+	              if (!(response.features.length > 0 && response.features[0].geometry.type == 'Point')) {
+	                throw new Error('Unexpected mapzen response: ' + response);
+	              }
+
+	              var coords = response.features[0].geometry.coordinates;
+	              request.lat = coords[1];
+	              request.lng = coords[0];
+	              resolve(request);
+	            }).catch(function (reason) {
+	              return reject(reason);
+	            });
+	          }
+
 	          CitySdkRequestUtils.getLatLngFromAddress(request.address).then(function (response) {
 	            var coordinates = response.result.addressMatches[0].coordinates;
 	            request.lat = coordinates.y;
