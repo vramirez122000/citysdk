@@ -20,6 +20,7 @@ const fipsGeocoderTigerWebUrl = 'http://tigerweb.geo.census.gov/ArcGIS/rest/serv
 const addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 const addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 const addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
+const addressGeocoderGoogleUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address='
 
 export default class CitySdkRequestUtils {
   static parseToVariable(aliasOrVariable) {
@@ -205,6 +206,53 @@ export default class CitySdkRequestUtils {
     return CitySdkHttp.get(url, false);
   }
 
+  /**
+   * Takes an address object with the fields "street", "city", "state", and "zip".
+   * Either city and state or zip must be provided with the street. This function
+   * uses the Google Maps Geocoding API
+   *
+   * @param address
+   * @param googlemaps_api_key
+   *
+   * @returns {promise}
+   */
+  static getLatLngFromAddressGoogleMapsAPI(address, googlemaps_api_key) {
+    let url = addressGeocoderGoogleUrl;
+
+    if(!googlemaps_api_key) {
+      throw new Error('Google Maps API key was not provided');
+    }
+    // Address is required. If address is not present,
+    // then the request will fail.
+    if (!address.street) {
+      throw new Error('Invalid address! The required field "street" is missing.');
+    }
+
+    if (!address.city && !address.state && !address.zip) {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+    url += `${address.street},`;
+
+    if (address.zip) {
+      url += ` ${address.zip}`;
+    }
+    else if (address.city && address.state) {
+      url += ` ${address.city},${address.state}`;
+    }
+    else {
+      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+    }
+
+    url += `&key=${googlemaps_api_key}`;
+
+    url.replace(/\s/g, '+');
+
+    console.log(url);
+
+    return CitySdkHttp.get(url, false);
+  }
+
   static getLatLng(request) {
     let promiseHandler = (resolve, reject) => {
       if (request.address) {
@@ -231,6 +279,24 @@ export default class CitySdkRequestUtils {
             if (!(response.features.length > 0
               && response.features[0].geometry.type == 'Point')) {
               throw new Error(`Unexpected mapzen response: ${JSON.stringify(response)}`)
+            }
+
+            let coords = response.features[0].geometry.coordinates;
+            request.lat = coords[1];
+            request.lng = coords[0];
+            resolve(request);
+
+          }).catch((reason) => reject(reason));
+        }
+
+        if(request.geocoderSelection == 'google') {
+          if(!request.geocoderApiKey) {
+            throw new Error('Google API Key not provided, please place key in geocoderApiKey parameter')
+          }
+          CitySdkRequestUtils.getLatLngFromAddressGoogleMapsAPI(request.address).then((response) => {
+
+            if (response.status != "OK") {
+              throw new Error(`Unexpected mapzen response: ${response.status}`)
             }
 
             let coords = response.features[0].geometry.coordinates;
@@ -318,7 +384,7 @@ export default class CitySdkRequestUtils {
     if (!request.api || !request.year) {
       throw new Error('Invalid request! "year" and "api" fields must be provided.');
     }
-    
+
     let url = `${defaultEndpoints.censusUrl}${request.year}/${request.api}/geography.json`;
     return CitySdkHttp.get(url, false);
   }
