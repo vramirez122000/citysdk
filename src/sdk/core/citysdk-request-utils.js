@@ -222,26 +222,16 @@ export default class CitySdkRequestUtils {
     if(!googlemaps_api_key) {
       throw new Error('Google Maps API key was not provided');
     }
-    // Address is required. If address is not present,
-    // then the request will fail.
-    if (!address.street) {
-      throw new Error('Invalid address! The required field "street" is missing.');
-    }
 
-    if (!address.city && !address.state && !address.zip) {
-      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
-    }
+    CitySdkRequestUtils.validateAddressFields(address);
 
     url += `${address.street},`;
 
     if (address.zip) {
       url += ` ${address.zip}`;
     }
-    else if (address.city && address.state) {
-      url += ` ${address.city},${address.state}`;
-    }
     else {
-      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+      url += ` ${address.city},${address.state}`;
     }
 
     url += `&key=${googlemaps_api_key}`;
@@ -296,12 +286,11 @@ export default class CitySdkRequestUtils {
           CitySdkRequestUtils.getLatLngFromAddressGoogleMapsAPI(request.address).then((response) => {
 
             if (response.status != "OK") {
-              throw new Error(`Unexpected mapzen response: ${response.status}`)
+              throw new Error(`Unexpected Google Geocoder Maps API response: ${response.status}`)
             }
 
-            let coords = response.features[0].geometry.coordinates;
-            request.lat = coords[1];
-            request.lng = coords[0];
+            request.lat = response.geometry.location.lat;
+            request.lng = response.geometry.location.lng;
             resolve(request);
 
           }).catch((reason) => reject(reason));
