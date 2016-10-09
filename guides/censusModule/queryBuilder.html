@@ -25,11 +25,19 @@ title: Census Module Query Builder
         <div class="row">
           <div class="col-md-6">
             <label for="geocoderSelection">Geocoder</label>
-            <select class="reqparam form-control" id="geocoderSelection"></select>
+            <select class="reqparam form-control" id="geocoderSelection">
+              <option value="">Census (Default)</option>
+              <option value="'google'">Google Maps API</option>
+              <option value="'mapzen'">Mapzen</option>
+              <option value="'nominatin'">Nominatin</option>
+            </select>
           </div>
           <div class="col-md-6">
             <label for="fipsTranslator">FIPS Translator</label>
-            <select class="reqparam form-control" id="fipsTranslator"></select>
+            <select class="reqparam form-control" id="fipsTranslator">
+              <option value="'census'">Census (Default)</option>
+              <option value="'fcc'">FCC</option>
+            </select>
           </div>
         </div>
       </div>
