@@ -15,7 +15,7 @@ const defaultEndpoints = {
 
 const zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 const fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
-const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=json';
+const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=jsonp';
 const addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 const addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 const addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
@@ -159,6 +159,8 @@ export default class CitySdkRequestUtils {
       url += `&city${address.city}&county=${address.state}`;
     }
 
+    //url = encodeURIComponent(url);
+
     console.log(url);
 
     return CitySdkHttp.get(url, false);
@@ -186,13 +188,15 @@ export default class CitySdkRequestUtils {
     url += `${address.street}`;
 
     if (address.zip) {
-      url += ` ${address.zip}`;
+      url += `,${address.zip}`;
     }
     else {
-      url += ` ${address.city},${address.state}`;
+      url += `,${address.city},${address.state}`;
     }
 
     url += `&api_key=${mapzenApiKey}`;
+
+    //url = encodeURIComponent(url);
 
     console.log(url);
 
@@ -221,15 +225,15 @@ export default class CitySdkRequestUtils {
     url += `${address.street},`;
 
     if (address.zip) {
-      url += ` ${address.zip}`;
+      url += `,${address.zip}`;
     }
     else {
-      url += ` ${address.city},${address.state}`;
+      url += `,${address.city},${address.state}`;
     }
 
     url += `&key=${googlemaps_api_key}`;
 
-    url.replace(/\s/g, '+');
+    //url = encodeURIComponent(url);
 
     console.log(url);
 
@@ -334,7 +338,7 @@ export default class CitySdkRequestUtils {
     console.log(url);
 
     let promiseHandler = (resolve, reject) => {
-      CitySdkHttp.get(url, false).then((response) => {
+      CitySdkHttp.get(url, true).then((response) => {
 
         if(response.status != 'OK') {
           throw new Error("FCC FIPS service response ")

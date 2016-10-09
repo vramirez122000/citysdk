@@ -125,6 +125,77 @@ describe('getLatLngFromAddress using city and state', function() {
   });
 });
 
+describe('getLatLngFromAddressUsingNominatim using city and state', function() {
+  var address = {
+    street: '100 1st Street',
+    city: 'Rockville',
+    state: 'MD'
+  };
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLngFromAddressUsingNominatim(address).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should use the city and state, and make a successful request using Nominatim', function() {
+    expect(result.length > 0).toBe(true);
+    expect(result[0].hasOwnProperty('lat') && result[0].hasOwnProperty('lon')).toBe(true);
+  });
+});
+
+describe('getLatLngFromAddressUsingMapzenSearch using city and state', function() {
+  var address = {
+    street: '100 1st Street',
+    city: 'Rockville',
+    state: 'MD'
+  };
+
+  var mapzenApiKey = 'mapzen-pSJTuiS';
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLngFromAddressUsingMapzenSearch(address, mapzenApiKey).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should use the city and state, and make a successful request using Mapzen Search', function() {
+    expect(result.features.length > 0).toBe(true);
+    expect(typeof result.features[0].geometry.coordinates[0]).toBe('number');
+  });
+});
+
+describe('getLatLngFromAddressGoogleMapsAPI using city and state', function() {
+  var address = {
+    street: '100 1st Street',
+    city: 'Rockville',
+    state: 'MD'
+  };
+
+  var googleApiKey = 'AIzaSyBQUeW3GLLURt9BYXXd4TDjLgs4k8zqTX0';
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLngFromAddressGoogleMapsAPI(address, googleApiKey).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should use the city and state, and make a successful request using Google Maps API Geocoder', function() {
+    expect(result.status == "OK").toBe(true);
+    expect(result.results.length > 0).toBe(true);
+    expect(typeof result.results[0].geometry.location.lat).toBe('number');
+  });
+});
+
 describe('getLatLng using request with address', function() {
   var request = {
     address: {
@@ -143,6 +214,80 @@ describe('getLatLng using request with address', function() {
   });
 
   it('should successfully retrieve the coordinates using the address', function() {
+    expect(request.hasOwnProperty('lat') && request.hasOwnProperty('lng')).toBe(true);
+    expect(typeof request.lat).toBe('number');
+  });
+});
+
+describe('getLatLng using request with address using Nominatim', function() {
+  var request = {
+    address: {
+      street: '100 1st Street',
+      zip: '20851',
+      geocoderSelection: 'nominatim'
+    }
+  };
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLng(request).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should successfully retrieve the coordinates using the address, using Nominatim Geocoder', function() {
+    expect(request.hasOwnProperty('lat') && request.hasOwnProperty('lng')).toBe(true);
+    expect(typeof request.lat).toBe('number');
+  });
+});
+
+describe('getLatLng using request with address using Mapzen', function() {
+  var request = {
+    address: {
+      street: '100 1st Street',
+      zip: '20851',
+      geocoderSelection: 'mapzen',
+      geocoderApiKey: 'mapzen-pSJTuiS'
+    }
+  };
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLng(request).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should successfully retrieve the coordinates using the address, using Mapzen Search Geocoder', function() {
+    expect(request.hasOwnProperty('lat') && request.hasOwnProperty('lng')).toBe(true);
+    expect(typeof request.lat).toBe('number');
+  });
+});
+
+describe('getLatLng using request with address using Google Maps API Geocoder', function() {
+  var request = {
+    address: {
+      street: '100 1st Street',
+      zip: '20851',
+      geocoderSelection: 'google',
+      geocoderApiKey: 'AIzaSyBQUeW3GLLURt9BYXXd4TDjLgs4k8zqTX0'
+    }
+  };
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLng(request).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should successfully retrieve the coordinates using the address, using Google Maps API Geocoder', function() {
     expect(request.hasOwnProperty('lat') && request.hasOwnProperty('lng')).toBe(true);
     expect(typeof request.lat).toBe('number');
   });
@@ -209,6 +354,35 @@ describe('getFipsFromLatLng', function() {
     });
 
     it('should return a modified request object with fips codes', function() {
+      expect(request.hasOwnProperty('state')).toBe(true);
+      expect(request.hasOwnProperty('county')).toBe(true);
+      expect(request.hasOwnProperty('blockGroup')).toBe(true);
+      expect(request.hasOwnProperty('tract')).toBe(true);
+    });
+  });
+});
+
+describe('getFipsFromLatLngUsingFcc', function() {
+  var request = {state: 'MD'};
+
+  beforeEach(function(done) {
+    CitySdkRequestUtils.getLatLng(request).then(function(response) {
+      request = response;
+      done();
+    });
+  });
+
+  describe('get fips codes', function() {
+    var result;
+
+    beforeEach(function(done) {
+      CitySdkRequestUtils.getFipsFromLatLngUsingFcc(request).then(function(response) {
+        result = response;
+        done();
+      });
+    });
+
+    it('should return a modified request object with fips codes, using FCC fips endpoint.', function() {
       expect(request.hasOwnProperty('state')).toBe(true);
       expect(request.hasOwnProperty('county')).toBe(true);
       expect(request.hasOwnProperty('blockGroup')).toBe(true);

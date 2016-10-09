@@ -2548,10 +2548,11 @@
 
 	var zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 	var fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
-	var fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=json';
+	var fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=jsonp';
 	var addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 	var addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 	var addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
+	var addressGeocoderGoogleUrl = 'https://maps.googleapis.com/maps/api/geocode/json?address=';
 
 	var CitySdkRequestUtils = function () {
 	  function CitySdkRequestUtils() {
@@ -2706,6 +2707,8 @@
 	        url += '&city' + address.city + '&county=' + address.state;
 	      }
 
+	      //url = encodeURIComponent(url);
+
 	      console.log(url);
 
 	      return CitySdkHttp.get(url, false);
@@ -2736,12 +2739,53 @@
 	      url += '' + address.street;
 
 	      if (address.zip) {
-	        url += ' ' + address.zip;
+	        url += ',' + address.zip;
 	      } else {
-	        url += ' ' + address.city + ',' + address.state;
+	        url += ',' + address.city + ',' + address.state;
 	      }
 
 	      url += '&api_key=' + mapzenApiKey;
+
+	      //url = encodeURIComponent(url);
+
+	      console.log(url);
+
+	      return CitySdkHttp.get(url, false);
+	    }
+
+	    /**
+	     * Takes an address object with the fields "street", "city", "state", and "zip".
+	     * Either city and state or zip must be provided with the street. This function
+	     * uses the Google Maps Geocoding API
+	     *
+	     * @param address
+	     * @param googlemaps_api_key
+	     *
+	     * @returns {promise}
+	     */
+
+	  }, {
+	    key: 'getLatLngFromAddressGoogleMapsAPI',
+	    value: function getLatLngFromAddressGoogleMapsAPI(address, googlemaps_api_key) {
+	      var url = addressGeocoderGoogleUrl;
+
+	      if (!googlemaps_api_key) {
+	        throw new Error('Google Maps API key was not provided');
+	      }
+
+	      CitySdkRequestUtils.validateAddressFields(address);
+
+	      url += address.street + ',';
+
+	      if (address.zip) {
+	        url += ',' + address.zip;
+	      } else {
+	        url += ',' + address.city + ',' + address.state;
+	      }
+
+	      url += '&key=' + googlemaps_api_key;
+
+	      //url = encodeURIComponent(url);
 
 	      console.log(url);
 
@@ -2780,6 +2824,24 @@
 	              var coords = response.features[0].geometry.coordinates;
 	              request.lat = coords[1];
 	              request.lng = coords[0];
+	              resolve(request);
+	            }).catch(function (reason) {
+	              return reject(reason);
+	            });
+	          }
+
+	          if (request.geocoderSelection == 'google') {
+	            if (!request.geocoderApiKey) {
+	              throw new Error('Google API Key not provided, please place key in geocoderApiKey parameter');
+	            }
+	            CitySdkRequestUtils.getLatLngFromAddressGoogleMapsAPI(request.address).then(function (response) {
+
+	              if (response.status != "OK") {
+	                throw new Error('Unexpected Google Geocoder Maps API response: ' + response.status);
+	              }
+
+	              request.lat = response.geometry.location.lat;
+	              request.lng = response.geometry.location.lng;
 	              resolve(request);
 	            }).catch(function (reason) {
 	              return reject(reason);
@@ -2831,7 +2893,7 @@
 	      console.log(url);
 
 	      var promiseHandler = function promiseHandler(resolve, reject) {
-	        CitySdkHttp.get(url, false).then(function (response) {
+	        CitySdkHttp.get(url, true).then(function (response) {
 
 	          if (response.status != 'OK') {
 	            throw new Error("FCC FIPS service response ");
