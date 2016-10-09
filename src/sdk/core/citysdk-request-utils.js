@@ -15,8 +15,7 @@ const defaultEndpoints = {
 
 const zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 const fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
-const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?';
-const fipsGeocoderTigerWebUrl = 'http://tigerweb.geo.census.gov/ArcGIS/rest/services/State_County/MapServer/1/query?text=&geometry={"x":-122,"y": 41,"spatialReference":{"wkid":4326}}&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=STATE,COUNTY&f=json';
+const fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=json';
 const addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 const addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 const addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
@@ -156,11 +155,8 @@ export default class CitySdkRequestUtils {
     if (address.zip) {
       url += `&postalcode=${address.zip}`;
     }
-    else if (address.city && address.state) {
-      url += `&city${address.city}&county=${address.state}`;
-    }
     else {
-      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+      url += `&city${address.city}&county=${address.state}`;
     }
 
     console.log(url);
@@ -192,11 +188,8 @@ export default class CitySdkRequestUtils {
     if (address.zip) {
       url += ` ${address.zip}`;
     }
-    else if (address.city && address.state) {
-      url += ` ${address.city},${address.state}`;
-    }
     else {
-      throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+      url += ` ${address.city},${address.state}`;
     }
 
     url += `&api_key=${mapzenApiKey}`;
@@ -327,6 +320,39 @@ export default class CitySdkRequestUtils {
       } else {
         reject(new Error("One of 'address', 'state' or 'zip' must be provided."));
       }
+    };
+
+    return new Promise(promiseHandler);
+  }
+
+  static getFipsFromLatLngUsingFcc(request) {
+    let url = fipsGeocoderFccUrl;
+
+    // Benchmark id: 4 = Public_AR_Current
+    // Vintage id: 4 = Current_Current
+    url += `&longitude=${request.lng}&latitude=${request.lat}`;
+    console.log(url);
+
+    let promiseHandler = (resolve, reject) => {
+      CitySdkHttp.get(url, false).then((response) => {
+
+        if(response.status != 'OK') {
+          throw new Error("FCC FIPS service response ")
+        }
+
+        console.log(JSON.stringify(response));
+
+        // FIPS codes
+        request.state = response.State.FIPS;
+        request.county = response.County.FIPS.substring(2);
+        request.tract = response.Block.FIPS.substring(5,11);
+        request.blockGroup = response.Block.FIPS.substring(11,12);
+
+        console.log('FCC FIPS' + JSON.stringify(request));
+
+        request.geocoded = true;
+        resolve(request);
+      }).catch((reason) => reject(reason));
     };
 
     return new Promise(promiseHandler);

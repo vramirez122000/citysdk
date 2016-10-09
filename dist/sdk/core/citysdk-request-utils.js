@@ -2548,6 +2548,7 @@
 
 	var zctaJsonUrl = 'https://s3.amazonaws.com/citysdk/zipcode-to-coordinates.json';
 	var fipsGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates?';
+	var fipsGeocoderFccUrl = 'http://data.fcc.gov/api/block/find?format=json';
 	var addressGeocoderUrl = 'https://geocoding.geo.census.gov/geocoder/locations/address?benchmark=4&format=jsonp';
 	var addressGeocoderMapzenUrl = 'https://search.mapzen.com/v1/search?size=1&boundary.country=USA&text=';
 	var addressGeocoderNominatimUrl = ' http://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us,pr';
@@ -2701,10 +2702,8 @@
 
 	      if (address.zip) {
 	        url += '&postalcode=' + address.zip;
-	      } else if (address.city && address.state) {
-	        url += '&city' + address.city + '&county=' + address.state;
 	      } else {
-	        throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+	        url += '&city' + address.city + '&county=' + address.state;
 	      }
 
 	      console.log(url);
@@ -2738,10 +2737,8 @@
 
 	      if (address.zip) {
 	        url += ' ' + address.zip;
-	      } else if (address.city && address.state) {
-	        url += ' ' + address.city + ',' + address.state;
 	      } else {
-	        throw new Error('Invalid address! "city" and "state" or "zip" must be provided.');
+	        url += ' ' + address.city + ',' + address.state;
 	      }
 
 	      url += '&api_key=' + mapzenApiKey;
@@ -2819,6 +2816,42 @@
 	        } else {
 	          reject(new Error("One of 'address', 'state' or 'zip' must be provided."));
 	        }
+	      };
+
+	      return new Promise$1(promiseHandler);
+	    }
+	  }, {
+	    key: 'getFipsFromLatLngUsingFcc',
+	    value: function getFipsFromLatLngUsingFcc(request) {
+	      var url = fipsGeocoderFccUrl;
+
+	      // Benchmark id: 4 = Public_AR_Current
+	      // Vintage id: 4 = Current_Current
+	      url += '&longitude=' + request.lng + '&latitude=' + request.lat;
+	      console.log(url);
+
+	      var promiseHandler = function promiseHandler(resolve, reject) {
+	        CitySdkHttp.get(url, false).then(function (response) {
+
+	          if (response.status != 'OK') {
+	            throw new Error("FCC FIPS service response ");
+	          }
+
+	          console.log(JSON.stringify(response));
+
+	          // FIPS codes
+	          request.state = response.State.FIPS;
+	          request.county = response.County.FIPS.substring(2);
+	          request.tract = response.Block.FIPS.substring(5, 11);
+	          request.blockGroup = response.Block.FIPS.substring(11, 12);
+
+	          console.log('FCC FIPS' + JSON.stringify(request));
+
+	          request.geocoded = true;
+	          resolve(request);
+	        }).catch(function (reason) {
+	          return reject(reason);
+	        });
 	      };
 
 	      return new Promise$1(promiseHandler);
