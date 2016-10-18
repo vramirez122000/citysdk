@@ -9,6 +9,14 @@ import availableDatasets from '../../resources/available-datasets.json';
 const defaultApi = 'acs5';
 const defaultLevel = 'blockGroup';
 const defaultSublevel = false;
+const defaultGeocoder = 'census';
+const geocoderOptions = [
+  'census','mapzen','nominatim','google'
+];
+const defaultFipsGeocoder = 'census';
+const fipsGeocoderOptions = [
+  'census','fcc'
+];
 
 // Valid levels
 const levels = new Set(['blockGroup', 'tract', 'county', 'state', 'us', 'place']);
@@ -20,7 +28,13 @@ export default class CitySdkRequestValidator {
     if (!request.api) {
       request.api = defaultApi;
     }
-    
+    if (!request.geocoderSelection || geocoderOptions.indexOf(request.geocoderSelection) == -1) {
+      request.geocoderSelection = defaultGeocoder;
+    }
+    if (!request.fipsGeocoderSelection || fipsGeocoderOptions.indexOf(request.fipsGeocoderSelection) == -1) {
+      request.fipsGeocoderSelection = defaultFipsGeocoder;
+    }
+
     return this;
   }
   

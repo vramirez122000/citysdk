@@ -172,13 +172,21 @@ export default class CitySdk {
 
     let promiseHandler = (resolve, reject) => {
       let onRequestHasLatLng = (request) => {
-        CitySdkRequestUtils.getFipsFromLatLng(request)
-            .then(CitySdkRequestValidator.validateGeoVariables)
-            .then(CitySdkSummaryRequest.request)
-            .then(CitySdkTigerwebRequest.request)
-            .then(CitySdkGeoRequest.handleTigerwebResponse)
-            .then((response) => resolve(response))
-            .catch((reason) => reject(reason));
+
+        let fipsResponsePromise;
+        if(request.fipsGeocoderSelection == 'fcc') {
+          fipsResponsePromise = CitySdkRequestUtils.getFipsFromLatLngUsingFcc(request);
+        } else {
+          fipsResponsePromise = CitySdkRequestUtils.getFipsFromLatLng(request);
+        }
+
+        fipsResponsePromise
+          .then(CitySdkRequestValidator.validateGeoVariables)
+          .then(CitySdkSummaryRequest.request)
+          .then(CitySdkTigerwebRequest.request)
+          .then(CitySdkGeoRequest.handleTigerwebResponse)
+          .then((response) => resolve(response))
+          .catch((reason) => reject(reason));
       };
 
       if (!request.lat && !request.lng) {

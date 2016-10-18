@@ -1519,6 +1519,10 @@
 	var defaultApi = 'acs5';
 	var defaultLevel = 'blockGroup';
 	var defaultSublevel = false;
+	var defaultGeocoder = 'census';
+	var geocoderOptions = ['census', 'mapzen', 'nominatim', 'google'];
+	var defaultFipsGeocoder = 'census';
+	var fipsGeocoderOptions = ['census', 'fcc'];
 
 	// Valid levels
 	var levels = new Set(['blockGroup', 'tract', 'county', 'state', 'us', 'place']);
@@ -1533,6 +1537,12 @@
 	    value: function validateApi(request) {
 	      if (!request.api) {
 	        request.api = defaultApi;
+	      }
+	      if (!request.geocoderSelection || geocoderOptions.indexOf(request.geocoderSelection) == -1) {
+	        request.geocoderSelection = defaultGeocoder;
+	      }
+	      if (!request.fipsGeocoderSelection || fipsGeocoderOptions.indexOf(request.fipsGeocoderSelection) == -1) {
+	        request.fipsGeocoderSelection = defaultFipsGeocoder;
 	      }
 
 	      return this;
@@ -2948,7 +2958,15 @@
 
 	      var promiseHandler = function promiseHandler(resolve, reject) {
 	        var onRequestHasLatLng = function onRequestHasLatLng(request) {
-	          CitySdkRequestUtils.getFipsFromLatLng(request).then(CitySdkRequestValidator.validateGeoVariables).then(CitySdkSummaryRequest.request).then(CitySdkTigerwebRequest.request).then(CitySdkGeoRequest.handleTigerwebResponse).then(function (response) {
+
+	          var fipsResponsePromise = void 0;
+	          if (request.fipsGeocoderSelection == 'fcc') {
+	            fipsResponsePromise = CitySdkRequestUtils.getFipsFromLatLngUsingFcc(request);
+	          } else {
+	            fipsResponsePromise = CitySdkRequestUtils.getFipsFromLatLng(request);
+	          }
+
+	          fipsResponsePromise.then(CitySdkRequestValidator.validateGeoVariables).then(CitySdkSummaryRequest.request).then(CitySdkTigerwebRequest.request).then(CitySdkGeoRequest.handleTigerwebResponse).then(function (response) {
 	            return resolve(response);
 	          }).catch(function (reason) {
 	            return reject(reason);

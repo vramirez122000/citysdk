@@ -77,3 +77,28 @@ describe('request', function() {
     expect(result.hasOwnProperty('totals')).toBe(true);
   });
 });
+
+describe('requestUsingFccFipsGeocoder', function() {
+  var request = {
+    level: 'state',
+    zip: 21701,
+    variables: ['income', 'population'],
+    apikey: '88c69cd2d93fae30723c3ec3546d66521f339255',
+    fipsGeocoderSelection: 'fcc'
+  };
+
+  var result;
+
+  beforeEach(function(done) {
+    CitySdk.request(request).then(function(response) {
+      result = response;
+      done();
+    });
+  });
+
+  it('should return a valid response with geoJson', function() {
+    expect(result).toBeDefined();
+    expect(result.hasOwnProperty('features')).toBe(true);
+    expect(result.hasOwnProperty('totals')).toBe(true);
+  });
+});
